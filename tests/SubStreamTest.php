@@ -12,7 +12,7 @@ class SubStreamTest extends TestCase
     private $filename = __DIR__ . '/ipsum.txt';
 
 
-    public function setUp()
+    public function setUp(): void
     {
         $this->string = \file_get_contents($this->filename);
         $this->memoryStream = \fopen('php://memory', 'r+');
