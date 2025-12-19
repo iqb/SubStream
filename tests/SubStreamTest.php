@@ -7,14 +7,15 @@ use PHPUnit\Framework\TestCase;
 
 class SubStreamTest extends TestCase
 {
+    const INPUT_FILE = __DIR__ . '/ipsum.txt';
+
     private $string;
     private $memoryStream;
-    private $filename = __DIR__ . '/ipsum.txt';
 
 
     public function setUp(): void
     {
-        $this->string = \file_get_contents($this->filename);
+        $this->string = \file_get_contents(self::INPUT_FILE);
         $this->memoryStream = \fopen('php://memory', 'r+');
         if (\strlen($this->string) !== ($bytesWritten = \fwrite($this->memoryStream, $this->string))) {
             throw new \RuntimeException('Setup failed!: ' . $bytesWritten);
@@ -24,7 +25,7 @@ class SubStreamTest extends TestCase
 
     public function offsetProvider()
     {
-        $length = \filesize($this->filename);
+        $length = \filesize(self::INPUT_FILE);
 
         return [
             "SubStream for 0:$length" => [0, $length, 0, $length, 31, 32],

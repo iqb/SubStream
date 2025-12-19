@@ -52,32 +52,24 @@ final class SubStream
     public function stream_open(string $path, string $mode, int $options)
     {
         $errors = ($options & \STREAM_REPORT_ERRORS);
-        $parts = \parse_url($path);
 
-        if (!isset($parts['scheme']) || $parts['scheme'] !== SUBSTREAM_SCHEME) {
-            $errors && \trigger_error("Invalid URL scheme.", \E_USER_ERROR);
+        if (!preg_match('/^' . preg_quote(SUBSTREAM_SCHEME, '/') . ':\/\/(?<offset>[0-9]+):(?<length>[0-9]+)\/(?<resourceId>[0-9]+)$/', $path, $matches)) {
+            $errors && trigger_error("Failed to parse URL.", E_USER_ERROR);
             return false;
         }
 
-        if (!isset($parts['host']) || !\is_numeric($parts['host'])) {
-            $errors && \trigger_error("Invalid start offset.", \E_USER_ERROR);
+        $offset = intval($matches['offset']);
+        $length = intval($matches['length']);
+        $resourceId = $matches['resourceId'];
+
+        if ($offset < 0) {
+            $errors && \trigger_error("Invalid negative offset.", \E_USER_ERROR);
             return false;
-        } else {
-            $offset = \intval($parts['host']);
         }
 
-        if (!isset($parts['port']) || !\is_numeric($parts['port'])) {
-            $errors && \trigger_error("Invalid length.", \E_USER_ERROR);
+        if ($length < 0) {
+            $errors && \trigger_error("Invalid negative length.", \E_USER_ERROR);
             return false;
-        } else {
-            $length = \intval($parts['port']);
-        }
-
-        if (!isset($parts['path']) || !\is_numeric(\substr($parts['path'], 1))) {
-            $errors && \trigger_error("Invalid resource to wrap.", \E_USER_ERROR);
-            return false;
-        } else {
-            $resourceId = \intval(\substr($parts['path'], 1));
         }
 
         if (\function_exists('\get_resources')) {
