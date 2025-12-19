@@ -23,8 +23,22 @@ class SubStreamTest extends TestCase
             throw new \RuntimeException('Setup failed!: ' . $bytesWritten);
         }
     }
-
-
+    
+    
+    private function generateTestCases(int $length): array
+    {
+        return [
+            "for 0:$length"                               => [0, $length, 0, $length, 31, 32],
+            "for 10:" . ($length-10)                      => [10, $length-10, 10, $length-10, 31, 32],
+            "for " . ($length-53) . ':53'                 => [$length-53, 53, 0, 55, 31, 32],
+            
+            // Different seek variants
+            "for " . ($length-350) . ':256 and SEEK_CUR'  => [$length-350, 256, 0, 256, 1, 32, SEEK_CUR],
+            "for " . ($length-350) . ':256 and SEEK_END'  => [$length-350, 256, -256, 0, 1, 32, SEEK_END],
+        ];
+    }
+    
+    
     public function offsetProvider(): Iterator
     {
         $string = file_get_contents(self::INPUT_FILE);
@@ -36,31 +50,29 @@ class SubStreamTest extends TestCase
             throw new RuntimeException('Setup failed!: ' . $bytesWritten);
         }
         fseek($memoryStream, 0);
-
+        
+        $testVariants = $this->generateTestCases($length);
+        
         foreach (['Memory' => $memoryStream, 'File' => $fileStream] as $streamName => $stream) {
-            yield "SubStream on $streamName for 0:$length"                               => [$stream, $string, 0, $length, 0, $length, 31, 32];
-            yield "SubStream on $streamName for 10:" . ($length-10)                      => [$stream, $string, 10, $length-10, 10, $length-10, 31, 32];
-            yield "SubStream on $streamName for " . ($length-53) . ':53'                 => [$stream, $string, $length-53, 53, 0, 55, 31, 32];
-
-            // Different seek variants
-            yield "SubStream on $streamName for " . ($length-350) . ':256 and SEEK_CUR'  => [$stream, $string, $length-350, 256, 0, 256, 1, 32, \SEEK_CUR];
-            yield "SubStream on $streamName for " . ($length-350) . ':256 and SEEK_END'  => [$stream, $string, $length-350, 256, -256, 0, 1, 32, \SEEK_END];
+            foreach ($testVariants as $testVariantName => $testVariant) {
+                yield "SubStream on $streamName $testVariantName" => array_merge([$stream, $string], $testVariant);
+            }
         }
     }
-
-
+    
+    
     /**
      * @dataProvider offsetProvider
      */
     public function testSubStreamByResourceId($stream, string $referenceString, int $offset, int $length, int $iterationStart, int $iterationLimit, int $iterationStep, int $probeLength, int $seekMode = \SEEK_SET)
     {
         $oldStreamPosition = ftell($stream);
-        $subStream = \fopen(SUBSTREAM_SCHEME . '://' . $offset . ':' . $length . '/' . (int)$stream, 'r');
+        $subStream = fopen(SUBSTREAM_SCHEME . '://' . $offset . ':' . $length . '/' . (int)$stream, 'r');
         $this->defaultSubstreamTest($subStream, $referenceString, $offset, $length, $iterationStart, $iterationLimit, $iterationStep, $probeLength, $seekMode);
         $this->assertSame($oldStreamPosition, ftell($stream));
     }
-
-
+    
+    
     /**
      * @dataProvider offsetProvider
      */
@@ -70,6 +82,35 @@ class SubStreamTest extends TestCase
         $subStream = fopen(SUBSTREAM_SCHEME . '://' . $offset . ':' . $length, 'r', false, stream_context_create([SUBSTREAM_SCHEME => ['stream' => $stream]]));
         $this->defaultSubstreamTest($subStream, $referenceString, $offset, $length, $iterationStart, $iterationLimit, $iterationStep, $probeLength, $seekMode);
         $this->assertSame($oldStreamPosition, ftell($stream));
+    }
+    
+    
+    public function casesWithUrlProvider(): Iterator
+    {
+        $string = file_get_contents(self::INPUT_FILE);
+        $length = strlen($string);
+        $fileStream = fopen(self::INPUT_FILE, 'r');
+        $memoryStream = fopen('php://memory', 'r+');
+        
+        if (strlen($string) !== ($bytesWritten = fwrite($memoryStream, $string))) {
+            throw new RuntimeException('Setup failed!: ' . $bytesWritten);
+        }
+        fseek($memoryStream, 0);
+        
+        $testVariants = $this->generateTestCases($length);
+        foreach ($testVariants as $testVariantName => $testVariant) {
+            yield "SubStream with url $testVariantName" => array_merge([self::INPUT_FILE, $string], $testVariant);
+        }
+    }
+    
+    
+    /**
+     * @dataProvider casesWithUrlProvider
+     */
+    public function testSubStreamByUrl(string $url, string $referenceString, int $offset, int $length, int $iterationStart, int $iterationLimit, int $iterationStep, int $probeLength, int $seekMode = \SEEK_SET)
+    {
+        $subStream = fopen(SUBSTREAM_SCHEME . "://$offset:$length/$url", 'r');
+        $this->defaultSubstreamTest($subStream, $referenceString, $offset, $length, $iterationStart, $iterationLimit, $iterationStep, $probeLength, $seekMode);
     }
     
     

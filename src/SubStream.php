@@ -63,23 +63,23 @@ final class SubStream
     public function stream_open(string $path, string $mode, int $options): bool
     {
         $errors = ($options & \STREAM_REPORT_ERRORS);
-
-        if (!preg_match('/^' . preg_quote(SUBSTREAM_SCHEME, '/') . ':\/\/(?<offset>[0-9]+):(?<length>[0-9]+)(?:\/(?<resourceId>[0-9]+)?)?$/', $path, $matches)) {
+        
+        if (!preg_match('/^' . preg_quote(SUBSTREAM_SCHEME, '/') . ':\/\/(?<offset>[0-9]+):(?<length>[0-9]+)(?:\/(?:(?<resourceId>[0-9]+)?|(?<url>.+))?)?$/', $path, $matches)) {
             $errors && trigger_error("Failed to parse URL.", E_USER_ERROR);
             return false;
         }
-
+        
         if (($offset = intval($matches['offset'])) < 0) {
             $errors && trigger_error("Invalid negative offset.", E_USER_ERROR);
             return false;
         }
-
+        
         if (($length = intval($matches['length'])) < 0) {
             $errors && trigger_error("Invalid negative length.", E_USER_ERROR);
             return false;
         }
-
-        if (($resourceId = ($matches['resourceId'] ?? null)) !== null) {
+        
+        if ($resourceId = ($matches['resourceId'] ?? null)) {
             $resources = get_resources('stream');
             if (!isset($resources[$resourceId])) {
                 $errors && trigger_error("Invalid resource #$resourceId.", E_USER_ERROR);
@@ -87,6 +87,19 @@ final class SubStream
             }
             
             return $this->cloneStream($resources[$resourceId], $offset, $length, $errors);
+        }
+        
+        elseif ($url = $matches['url'] ?? null) {
+            $this->handle = fopen($url, $mode);
+            if (!$this->handle) {
+                $errors && trigger_error("Failed to open '$url'.", E_USER_ERROR);
+                return false;
+            }
+            fseek($this->handle, $offset);
+            $this->offset = 0;
+            $this->enforceOffsetMin = $offset;
+            $this->enforceOffsetMax = $offset + $length;
+            return true;
         }
         
         elseif ($this->context && ($contextOptions = stream_context_get_options($this->context))) {
@@ -105,7 +118,6 @@ final class SubStream
     }
 
 
-    
     private function cloneStream($originalResource, int $offset, int $length, bool $errors): bool
     {
         $meta = stream_get_meta_data($originalResource);
